@@ -1,13 +1,15 @@
-package views
+package Views
 
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"image/color"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -19,16 +21,18 @@ const (
 
 var appCtx = app.New()
 var carGraphics []*canvas.Rectangle
+var garageMutex sync.Mutex
+var parkingSpacesSemaphore = make(chan struct{}, maxCars)
+var accessGateSemaphore = make(chan struct{}, 1)
 
 func ShowGUI() {
 	window := appCtx.NewWindow("Estacionamiento")
-	label := widget.NewLabel("Estacionamiento")
 
 	garage := createParkingGarage()
 
-	entrance := createEntrance()
-
-	containerWithLayout := container.NewBorder(nil, entrance, nil, nil, container.NewMax(garage, label))
+	containerWithLayout := container.New(layout.NewVBoxLayout(),
+		garage,
+	)
 
 	window.SetContent(containerWithLayout)
 	window.Resize(fyne.NewSize(garageWidth, garageHeight+50))
@@ -39,24 +43,35 @@ func ShowGUI() {
 }
 
 func createParkingGarage() fyne.CanvasObject {
-	parkingGarage := container.NewGridWithRows(5)
-	for i := 0; i < 5; i++ {
-		row := container.NewGridWithColumns(4)
-		for j := 0; j < 4; j++ {
-			parkingSpace := canvas.NewRectangle(color.RGBA{R: 192, G: 192, B: 192, A: 255}) // Color gris
-			parkingSpace.Resize(fyne.NewSize(50, 50))                                       // Tamaño de espacio de estacionamiento
-			row.AddObject(parkingSpace)
-		}
-		parkingGarage.AddObject(row)
-	}
+	parkingGarage := container.New(layout.NewHBoxLayout())
+
+	leftSpaces := createParkingSpaces(5)
+	parkingGarage.Add(leftSpaces)
+	entranceImage := createEntranceImage()
+	parkingGarage.Add(entranceImage)
+	rightSpaces := createParkingSpaces(5)
+
+	parkingGarage.Add(rightSpaces)
+
 	return parkingGarage
 }
 
-func createEntrance() fyne.CanvasObject {
-	entranceButton := widget.NewButton("Entrada", func() {
-		// Acción al hacer clic en la entrada
-	})
-	return entranceButton
+func createParkingSpaces(count int) fyne.CanvasObject {
+	parkingSpaces := container.New(layout.NewVBoxLayout())
+	for i := 0; i < count; i++ {
+		parkingSpace := canvas.NewRectangle(color.RGBA{R: 0, G: 255, B: 0, A: 255}) // Color verde para los lugares de estacionamiento
+		parkingSpace.Resize(fyne.NewSize(50, 50))                                   // Tamaño de espacio de estacionamiento
+		parkingSpaces.Add(parkingSpace)
+	}
+	return parkingSpaces
+}
+
+func createEntranceImage() fyne.CanvasObject {
+	entranceImageData, _ := theme.FyneLogoResource().Content()
+	entranceResource := fyne.NewStaticResource("entrance.png", entranceImageData)
+	entranceImage := canvas.NewImageFromResource(entranceResource)
+	entranceImage.Resize(fyne.NewSize(50, 50)) // Tamaño de la entrada/salida
+	return entranceImage
 }
 
 func runSimulation() {
@@ -77,8 +92,7 @@ func AddCarToGarage() {
 		B: uint8(rand.Intn(255)),
 		A: 255,
 	})
-	car.Resize(fyne.NewSize(5, 5))                                               // Cambia el tamaño del rectángulo a 5x5 (ajusta según tus preferencias)
-	car.Move(fyne.NewPos(rand.Intn(garageWidth-20), rand.Intn(garageHeight-20))) // Ajusta el tamaño máximo
+	car.Resize(fyne.NewSize(20, 20))
 	carGraphics = append(carGraphics, car)
 
 	go moveCar(car)
@@ -86,13 +100,19 @@ func AddCarToGarage() {
 
 func moveCar(car *canvas.Rectangle) {
 	for {
-		// Modificar la posición del carro en el estacionamiento
-		car.Move(fyne.NewPos(rand.Intn(garageWidth-20), rand.Intn(garageHeight-20)))
+		accessGateSemaphore <- struct{}{}
+		<-accessGateSemaphore
 
-		// Refrescar la vista para actualizar la posición del carro
+		parkingSpacesSemaphore <- struct{}{}
+		garageMutex.Lock()
+
+		car.Move(fyne.NewPos(float32(rand.Intn(garageWidth-20)), float32(garageHeight/2-10)))
+
+		garageMutex.Unlock()
+		<-parkingSpacesSemaphore
+
 		UpdateGarageView()
 
-		// Simular tiempo de ocupación del cajón
 		time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 	}
 }
