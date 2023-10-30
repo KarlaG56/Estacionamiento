@@ -35,15 +35,15 @@ func ShowGUI() {
 	window.Show()
 
 	// Comenzar a agregar autos al estacionamiento
-	go runSimulation()
+	go runSimulation(window)
 }
 
-func runSimulation() {
+func runSimulation(window fyne.Window) {
 	for {
 		if len(carGraphics) < maxCars {
 			AddCarToGarage()
 		}
-		UpdateGarageView()
+		UpdateGarageView(window)
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -51,18 +51,17 @@ func runSimulation() {
 func AddCarToGarage() {
 	car := canvas.NewRectangle(color.RGBA{R: uint8(rand.Intn(255)), G: uint8(rand.Intn(255)), B: uint8(rand.Intn(255)), A: 255})
 	car.Resize(fyne.NewSize(20, 20))
-	car.Move(fyne.NewPos(rand.Int(garageWidth-20), rand.Intn(garageHeight-20)))
+	car.Move(fyne.NewPos(float32(rand.Intn(garageWidth-20)), float32(rand.Intn(garageHeight-20))))
 	carGraphics = append(carGraphics, car)
 }
 
-func UpdateGarageView() {
+func UpdateGarageView(window fyne.Window) {
 	contentObjects := []fyne.CanvasObject{canvas.NewRectangle(theme.BackgroundColor())}
 
 	for _, car := range carGraphics {
 		contentObjects = append(contentObjects, car)
 	}
 
-	window := appCtx.Driver().AllWindows()[0]
 	window.SetContent(container.NewMax(contentObjects...))
-	window.Canvas().Refresh(contentObjects)
+	window.Canvas().Refresh(contentObjects[0])
 }
