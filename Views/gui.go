@@ -1,12 +1,12 @@
 package Views
 
 import (
-	"fyne.io/fyne"
-	"fyne.io/fyne/app"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/container"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"image/color"
 	"math/rand"
 	"time"
@@ -51,7 +51,7 @@ func runSimulation() {
 func AddCarToGarage() {
 	car := canvas.NewRectangle(color.RGBA{R: uint8(rand.Intn(255)), G: uint8(rand.Intn(255)), B: uint8(rand.Intn(255)), A: 255})
 	car.Resize(fyne.NewSize(20, 20))
-	car.Move(fyne.NewPos(rand.Intn(garageWidth-20), rand.Intn(garageHeight-20)))
+	car.Move(fyne.NewPos(rand.Int(garageWidth-20), rand.Intn(garageHeight-20)))
 	carGraphics = append(carGraphics, car)
 }
 
@@ -64,5 +64,5 @@ func UpdateGarageView() {
 
 	window := appCtx.Driver().AllWindows()[0]
 	window.SetContent(container.NewMax(contentObjects...))
-	window.Canvas().Refresh(window.Content())
+	window.Canvas().Refresh(contentObjects)
 }
