@@ -4,6 +4,7 @@ import (
 	"Simulador/Models"
 	"Simulador/Scenes"
 	"Simulador/Views"
+	_ "Simulador/Views"
 )
 
 const maxCars = 20

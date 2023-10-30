@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
-
-	_ "Simulador/Models"
 )
 
 const (

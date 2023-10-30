@@ -1,12 +1,10 @@
-package Views
+package views
 
 import (
-	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"image/color"
 	"math/rand"
@@ -26,25 +24,49 @@ func ShowGUI() {
 	window := appCtx.NewWindow("Estacionamiento")
 	label := widget.NewLabel("Estacionamiento")
 
-	garage := canvas.NewRectangle(theme.BackgroundColor())
-	garage.Resize(fyne.NewSize(garageWidth, garageHeight))
+	garage := createParkingGarage()
 
-	containerWithLayout := container.NewMax(garage, label)
+	entrance := createEntrance()
+
+	containerWithLayout := container.NewBorder(nil, entrance, nil, nil, container.NewMax(garage, label))
+
 	window.SetContent(containerWithLayout)
 	window.Resize(fyne.NewSize(garageWidth, garageHeight+50))
 
-	window.Show()
+	window.ShowAndRun()
 
-	go runSimulation(window)
+	go runSimulation()
 }
 
-func runSimulation(window fyne.Window) {
-	for {
-		if len(carGraphics) < maxCars {
-			AddCarToGarage()
+func createParkingGarage() fyne.CanvasObject {
+	parkingGarage := container.NewGridWithRows(5)
+	for i := 0; i < 5; i++ {
+		row := container.NewGridWithColumns(4)
+		for j := 0; j < 4; j++ {
+			parkingSpace := canvas.NewRectangle(color.RGBA{R: 192, G: 192, B: 192, A: 255}) // Color gris
+			parkingSpace.Resize(fyne.NewSize(50, 50))                                       // Tamaño de espacio de estacionamiento
+			row.AddObject(parkingSpace)
 		}
-		UpdateGarageView(window)
-		time.Sleep(2 * time.Second)
+		parkingGarage.AddObject(row)
+	}
+	return parkingGarage
+}
+
+func createEntrance() fyne.CanvasObject {
+	entranceButton := widget.NewButton("Entrada", func() {
+		// Acción al hacer clic en la entrada
+	})
+	return entranceButton
+}
+
+func runSimulation() {
+	for {
+		select {
+		case <-time.After(time.Second):
+			if len(carGraphics) < maxCars {
+				go AddCarToGarage()
+			}
+		}
 	}
 }
 
@@ -55,24 +77,34 @@ func AddCarToGarage() {
 		B: uint8(rand.Intn(255)),
 		A: 255,
 	})
-	car.Resize(fyne.NewSize(20, 20))
-	car.Move(fyne.NewPos(float32(rand.Intn(garageWidth-20)), float32(rand.Intn(garageHeight-20)))
+	car.Resize(fyne.NewSize(5, 5))                                               // Cambia el tamaño del rectángulo a 5x5 (ajusta según tus preferencias)
+	car.Move(fyne.NewPos(rand.Intn(garageWidth-20), rand.Intn(garageHeight-20))) // Ajusta el tamaño máximo
 	carGraphics = append(carGraphics, car)
 
-	fmt.Println("Auto agregado al estacionamiento.")
+	go moveCar(car)
 }
 
-func UpdateGarageView(window fyne.Window) {
-	contentObjects := make([]fyne.CanvasObject, 0)
-	contentObjects = append(contentObjects, canvas.NewRectangle(theme.BackgroundColor()))
+func moveCar(car *canvas.Rectangle) {
+	for {
+		// Modificar la posición del carro en el estacionamiento
+		car.Move(fyne.NewPos(rand.Intn(garageWidth-20), rand.Intn(garageHeight-20)))
+
+		// Refrescar la vista para actualizar la posición del carro
+		UpdateGarageView()
+
+		// Simular tiempo de ocupación del cajón
+		time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
+	}
+}
+
+func UpdateGarageView() {
+	contentObjects := []fyne.CanvasObject{canvas.NewRectangle(color.RGBA{R: 192, G: 192, B: 192, A: 255})}
 
 	for _, car := range carGraphics {
 		contentObjects = append(contentObjects, car)
 	}
 
-	content := container.NewMax(contentObjects...)
-	window.SetContent(content)
-	window.Canvas().Refresh(content)
-
-	fmt.Println("Actualización de la vista.")
+	window := appCtx.Driver().AllWindows()[0]
+	window.SetContent(container.NewMax(contentObjects...))
+	window.Canvas().Refresh(window.Content())
 }
