@@ -2,53 +2,47 @@ package Scenes
 
 import (
 	"Simulador/Models"
-	"fmt"
-	"math/rand"
+	"Simulador/Views"
+	"github.com/faiface/pixel"
+	"github.com/faiface/pixel/pixelgl"
+	"golang.org/x/image/colornames"
 	"time"
 )
 
-const (
-	poisonInterval = 1
-	maxGarage      = 100
-)
+func Run() {
 
-func RunSimulation(garage *Models.Garage) {
-	for {
-		carArrives(garage)
-		time.Sleep(poisonInterval * time.Second)
+	Models.Init()
+
+	win, err := pixelgl.NewWindow(pixelgl.WindowConfig{
+		Title:  "Parking Lot Simulation",
+		Bounds: pixel.R(0, 0, 800, 600),
+	})
+	if err != nil {
+		panic(err)
 	}
-}
 
-func carArrives(garage *Models.Garage) {
-	carID := rand.Intn(maxGarage)
-	fmt.Printf("Car %d arrives.\n", carID)
-
-	if garage.CarsInGarage < garage.MaxCars {
-		garage.AddCar()
-		go func(id int) {
-			if parkCar(id) {
-				garage.RemoveCar()
+	go func() {
+		for car := range Models.CarChannel {
+			Models.LaneMutex.Lock()
+			for _, occupied := range Models.LaneStatus {
+				if !occupied {
+					break
+				}
 			}
-		}(carID)
-	} else {
-		fmt.Printf("Car %d is blocked - Parking is full.\n", carID)
-	}
-}
+			Models.LaneMutex.Unlock()
 
-func parkCar(carID int) bool {
-	// Simulating checking for available parking spots
-	for i := 1; i <= maxGarage; i++ {
-		fmt.Printf("Car %d is looking for a parking spot...\n", carID)
-		time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
-
-		// Check if a parking spot is available
-		if i == carID {
-			fmt.Printf("Car %d parked successfully.\n", carID)
-			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
-			fmt.Printf("Car %d leaves.\n", carID)
-			return true
+			go Models.Lane(car.ID)
 		}
+	}()
+
+	for !win.Closed() {
+		win.Clear(colornames.White)
+		Views.DrawParkingLot(win, Models.GetCars())
+		win.Update()
+		Models.CarsMutex.Lock()
+		Models.MoveCarsLogic()
+		Models.CarsMutex.Unlock()
+
+		time.Sleep(16 * time.Millisecond)
 	}
-	fmt.Printf("Car %d couldn't find a parking spot.\n", carID)
-	return false
 }
