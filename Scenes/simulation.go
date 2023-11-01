@@ -11,7 +11,7 @@ import (
 
 func Run() {
 
-	Models.Init()
+	Models.InicializarSistemaDeAutos()
 
 	win, err := pixelgl.NewWindow(pixelgl.WindowConfig{
 		Title:  "Parking Lot Simulation",
@@ -22,26 +22,26 @@ func Run() {
 	}
 
 	go func() {
-		for car := range Models.CarChannel {
-			Models.LaneMutex.Lock()
-			for _, occupied := range Models.LaneStatus {
+		for car := range Models.CanalAutos {
+			Models.MutexCarriles.Lock()
+			for _, occupied := range Models.EstadoCarriles {
 				if !occupied {
 					break
 				}
 			}
-			Models.LaneMutex.Unlock()
+			Models.MutexCarriles.Unlock()
 
-			go Models.Lane(car.ID)
+			go Models.SeleccionarCarril(car.ID)
 		}
 	}()
 
 	for !win.Closed() {
 		win.Clear(colornames.White)
-		Views.DrawParkingLot(win, Models.GetCars())
+		Views.DrawParkingLot(win, Models.ObtenerListaDeAutos())
 		win.Update()
-		Models.CarsMutex.Lock()
-		Models.MoveCarsLogic()
-		Models.CarsMutex.Unlock()
+		Models.MutexAutos.Lock()
+		Models.LogicaDeMovimientoDeAutos()
+		Models.MutexAutos.Unlock()
 
 		time.Sleep(16 * time.Millisecond)
 	}

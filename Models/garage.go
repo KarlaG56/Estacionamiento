@@ -8,188 +8,192 @@ import (
 )
 
 const (
-	numLanes  = 20
-	LaneWidth = 150.0
+	NumeroCarriles = 20
+	AnchoCarril    = 150.0
 )
 
 var (
-	LaneStatus           [numLanes]bool
-	Cars                 []Car
-	CarsMutex            sync.Mutex
-	LaneMutex            sync.Mutex
-	CarEnteringOrExiting bool
+	EstadoCarriles               [NumeroCarriles]bool
+	ListaDeAutos                 []Auto
+	MutexAutos                   sync.Mutex
+	MutexCarriles                sync.Mutex
+	AutoEnProcesoDeEntradaSalida bool
 )
 
-type Car struct {
-	ID                int
-	Position          pixel.Vec
-	PreviousPosition  pixel.Vec
-	Lane              int
-	Parked            bool
-	ExitTime          time.Time
-	IsEntering        bool
-	Teleporting       bool
-	TeleportStartTime time.Time
+type Auto struct {
+	ID                        int
+	Posicion                  pixel.Vec
+	PosicionPrevia            pixel.Vec
+	Carril                    int
+	Estacionado               bool
+	TiempoParaSalir           time.Time
+	EnProcesoDeEntrada        bool
+	EnProcesoDeTeleportacion  bool
+	TiempoInicioTeleportacion time.Time
 }
 
-var CarChannel chan Car
+var CanalAutos chan Auto
 
-func Init() {
-	CarChannel = make(chan Car)
-	go CarGenerator()
+func InicializarSistemaDeAutos() {
+	CanalAutos = make(chan Auto)
+	go GeneradorDeAutos()
 }
 
-func CreateCar(id int) Car {
-	CarsMutex.Lock()
-	defer CarsMutex.Unlock()
-	Car := Car{
-		ID:       id,
-		Position: pixel.V(0, 300),
-		Lane:     -1,
-		Parked:   false,
+func CrearNuevoAuto(id int) Auto {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	nuevoAuto := Auto{
+		ID:          id,
+		Posicion:    pixel.V(0, 300),
+		Carril:      -1,
+		Estacionado: false,
 	}
-	Cars = append(Cars, Car)
-	return Car
+	ListaDeAutos = append(ListaDeAutos, nuevoAuto)
+	return nuevoAuto
 }
 
-func SetExitTime(car *Car) {
+func AsignarTiempoDeSalida(auto *Auto) {
 	rand.Seed(time.Now().UnixNano())
-	exitIn := time.Duration(rand.Intn(5)+1) * time.Second
-	car.ExitTime = time.Now().Add(exitIn)
+	tiempoDeSalida := time.Duration(rand.Intn(5)+1) * time.Second
+	auto.TiempoParaSalir = time.Now().Add(tiempoDeSalida)
 }
 
-func GetCars() []Car {
-	return Cars
+func ObtenerListaDeAutos() []Auto {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	listaActualizadaDeAutos := make([]Auto, len(ListaDeAutos))
+	copy(listaActualizadaDeAutos, ListaDeAutos)
+	return listaActualizadaDeAutos
 }
 
-func AssignLaneToCar(id int, lane int) {
-	CarsMutex.Lock()
-	defer CarsMutex.Unlock()
-	for i := range Cars {
-		if Cars[i].ID == id {
-			Cars[i].Lane = lane
+func GeneradorDeAutos() {
+	id := 0
+	for {
+		id++
+		nuevoAuto := CrearNuevoAuto(id)
+		CanalAutos <- nuevoAuto
+		time.Sleep(time.Millisecond * 500)
+	}
+}
+
+func AsignarCarrilAlAuto(id int, carril int) {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	for i := range ListaDeAutos {
+		if ListaDeAutos[i].ID == id {
+			ListaDeAutos[i].Carril = carril
+			break
 		}
 	}
 }
 
-func ResetCarPosition(id int) {
-	CarsMutex.Lock()
-	defer CarsMutex.Unlock()
-	for i := range Cars {
-		if Cars[i].ID == id {
-			Cars[i].Position = pixel.V(0, 300)
+func ReiniciarPosicionDelAuto(id int) {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	for i := range ListaDeAutos {
+		if ListaDeAutos[i].ID == id {
+			ListaDeAutos[i].Posicion = pixel.V(0, 300)
+			break
 		}
 	}
 }
 
-func FindCarPosition(id int) pixel.Vec {
-	CarsMutex.Lock()
-	defer CarsMutex.Unlock()
-	for _, car := range Cars {
-		if car.ID == id {
-			return car.Position
+func EncontrarPosicionDelAuto(id int) pixel.Vec {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	for _, auto := range ListaDeAutos {
+		if auto.ID == id {
+			return auto.Posicion
 		}
 	}
 	return pixel.Vec{}
 }
 
-func ParkCar(car *Car, targetX, targetY float64) {
-	car.Position.X = targetX
-	car.Position.Y = targetY
-	car.Parked = true
-	SetExitTime(car)
+func EstacionarAuto(auto *Auto, posX, posY float64) {
+	auto.Posicion.X = posX
+	auto.Posicion.Y = posY
+	auto.Estacionado = true
+	AsignarTiempoDeSalida(auto)
 }
 
-func removeCar(index int) {
-	Cars = append(Cars[:index], Cars[index+1:]...)
+func EliminarAuto(indice int) {
+	ListaDeAutos = append(ListaDeAutos[:indice], ListaDeAutos[indice+1:]...)
 }
 
-func CarGenerator() {
-	id := 0
+func EsperarHastaPosicion(id int, posXObjetivo float64) {
 	for {
-		id++
-		car := CreateCar(id)
-		CarChannel <- car
-		time.Sleep(time.Millisecond * 500)
-	}
-}
-
-func WaitForPosition(id int, targetX float64) {
-	for {
-		carPos := FindCarPosition(id)
-		if carPos.X >= targetX {
+		posAuto := EncontrarPosicionDelAuto(id)
+		if posAuto.X >= posXObjetivo {
 			break
 		}
 		time.Sleep(16 * time.Millisecond)
 	}
 }
 
-func FindAvailableLane() (int, bool) {
-	LaneMutex.Lock()
-	defer LaneMutex.Unlock()
+func BuscarCarrilDisponible() (int, bool) {
+	MutexCarriles.Lock()
+	defer MutexCarriles.Unlock()
 	rand.Seed(time.Now().UnixNano())
-	lanes := rand.Perm(numLanes)
-	for _, l := range lanes {
-		if !LaneStatus[l] {
-			LaneStatus[l] = true
-			return l, true
+	ordenCarriles := rand.Perm(NumeroCarriles)
+	for _, carril := range ordenCarriles {
+		if !EstadoCarriles[carril] {
+			EstadoCarriles[carril] = true
+			return carril, true
 		}
 	}
 	return -1, false
 }
 
-func Lane(id int) {
-	CreateCar(id)
-	WaitForPosition(id, 100)
-	lane, foundLane := FindAvailableLane()
-	if !foundLane {
-		ResetCarPosition(id)
+func SeleccionarCarril(id int) {
+	EsperarHastaPosicion(id, 100)
+	carril, encontrado := BuscarCarrilDisponible()
+	if !encontrado {
+		ReiniciarPosicionDelAuto(id)
 		return
 	}
-	AssignLaneToCar(id, lane)
+	AsignarCarrilAlAuto(id, carril)
 }
 
-func MoveCarsLogic() {
-	for i := len(Cars) - 1; i >= 0; i-- {
-		if Cars[i].Position.X < 100 && Cars[i].Lane == -1 && !Cars[i].IsEntering {
-			Cars[i].Position.X += 10
-			if Cars[i].Position.X > 100 {
-				Cars[i].Position.X = 100
+func LogicaDeMovimientoDeAutos() {
+	for i := len(ListaDeAutos) - 1; i >= 0; i-- {
+		if ListaDeAutos[i].Posicion.X < 100 && ListaDeAutos[i].Carril == -1 && !ListaDeAutos[i].EnProcesoDeEntrada {
+			ListaDeAutos[i].Posicion.X += 10
+			if ListaDeAutos[i].Posicion.X > 100 {
+				ListaDeAutos[i].Posicion.X = 100
 			}
-		} else if Cars[i].Lane != -1 && !Cars[i].Parked {
-			var targetX, targetY float64
-			laneWidth := 600.0 / 10
-			if Cars[i].Lane < 10 {
-				targetX = 100.0 + float64(Cars[i].Lane)*laneWidth + laneWidth/2
-				targetY = 400 + (500-350)/2
+		} else if ListaDeAutos[i].Carril != -1 && !ListaDeAutos[i].Estacionado {
+			var destinoX, destinoY float64
+			anchoCarril := 600.0 / 10
+			if ListaDeAutos[i].Carril < 10 {
+				destinoX = 100.0 + float64(ListaDeAutos[i].Carril)*anchoCarril + anchoCarril/2
+				destinoY = 400 + (500-350)/2
 			} else {
-				targetX = 100.0 + float64(Cars[i].Lane-10)*laneWidth + laneWidth/2
-				targetY = 100 + (250-100)/2
+				destinoX = 100.0 + float64(ListaDeAutos[i].Carril-10)*anchoCarril + anchoCarril/2
+				destinoY = 100 + (250-100)/2
 			}
-			ParkCar(&Cars[i], targetX, targetY)
+			EstacionarAuto(&ListaDeAutos[i], destinoX, destinoY)
 		}
 	}
-	ExitCarLogic()
+	LogicaDeSalidaDelAuto()
 }
 
-func ExitCarLogic() {
-	for i := len(Cars) - 1; i >= 0; i-- {
-		if Cars[i].Parked && time.Now().After(Cars[i].ExitTime) && !Cars[i].IsEntering {
-			if !Cars[i].Teleporting {
-				Cars[i].Teleporting = true
-				Cars[i].TeleportStartTime = time.Now()
-				Cars[i].Position.X = 400
-				Cars[i].Position.Y = 300
-			} else if time.Since(Cars[i].TeleportStartTime) >= time.Millisecond*500 {
-				updateLaneStatus(Cars[i].Lane, false)
-				removeCar(i)
+func LogicaDeSalidaDelAuto() {
+	for i := len(ListaDeAutos) - 1; i >= 0; i-- {
+		if ListaDeAutos[i].Estacionado && time.Now().After(ListaDeAutos[i].TiempoParaSalir) && !ListaDeAutos[i].EnProcesoDeEntrada {
+			if !ListaDeAutos[i].EnProcesoDeTeleportacion {
+				ListaDeAutos[i].EnProcesoDeTeleportacion = true
+				ListaDeAutos[i].TiempoInicioTeleportacion = time.Now()
+				ListaDeAutos[i].Posicion = pixel.V(400, 300) // Posición de salida
+			} else if time.Since(ListaDeAutos[i].TiempoInicioTeleportacion) >= 500*time.Millisecond {
+				ActualizarEstadoCarril(ListaDeAutos[i].Carril, false)
+				EliminarAuto(i)
 			}
 		}
 	}
 }
 
-func updateLaneStatus(lane int, status bool) {
-	LaneMutex.Lock()
-	defer LaneMutex.Unlock()
-	LaneStatus[lane] = status
+func ActualizarEstadoCarril(lane int, status bool) {
+	MutexCarriles.Lock()
+	defer MutexCarriles.Unlock()
+	EstadoCarriles[lane] = status
 }

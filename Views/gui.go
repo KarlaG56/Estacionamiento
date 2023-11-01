@@ -17,12 +17,10 @@ var (
 	carSprites map[int]*pixel.Sprite
 )
 
-func LoadCarImages() {
-	// initialize the map
+func cargarImagenAuto() {
 	carSprites = make(map[int]*pixel.Sprite)
-	// iterate over car types or IDs
-	for _, car := range Models.GetCars() {
-		imgPath := "Assets/auto.png" // define how you get each car's image path
+	for _, car := range Models.ObtenerListaDeAutos() {
+		imgPath := "Assets/auto.png"
 		file, err := os.Open(imgPath)
 		if err != nil {
 			panic(err)
@@ -37,7 +35,7 @@ func LoadCarImages() {
 	}
 }
 
-func loadBackground() {
+func CargarFondo() {
 	file, err := os.Open("Assets/background.png")
 	if err != nil {
 		panic(err)
@@ -53,9 +51,9 @@ func loadBackground() {
 	background = pixel.NewSprite(bgPicture, bgPicture.Bounds())
 }
 
-func DrawParkingLot(win *pixelgl.Window, cars []Models.Car) {
+func DrawParkingLot(win *pixelgl.Window, autos []Models.Auto) {
 	if background == nil {
-		loadBackground()
+		CargarFondo()
 	}
 
 	background.Draw(win, pixel.IM.Moved(win.Bounds().Center()))
@@ -82,21 +80,12 @@ func DrawParkingLot(win *pixelgl.Window, cars []Models.Car) {
 		imd.Line(2)
 	}
 
-	carWidth := laneWidth / 4
-	carHeight := laneWidth / 4
+	cargarImagenAuto()
 
-	LoadCarImages()
-	for _, car := range cars {
-		sprite := carSprites[car.ID]
+	for _, auto := range autos {
+		sprite := carSprites[auto.ID]
 		if sprite != nil {
-			sprite.Draw(win, pixel.IM.Scaled(pixel.ZV, 0.1).Moved(car.Position))
-		} else {
-			imd.Color = colornames.Red
-			imd.Push(pixel.V(car.Position.X-carWidth/2, car.Position.Y-carHeight/2))
-			imd.Push(pixel.V(car.Position.X+carWidth/2, car.Position.Y-carHeight/2))
-			imd.Push(pixel.V(car.Position.X+carWidth/2, car.Position.Y+carHeight/2))
-			imd.Push(pixel.V(car.Position.X-carWidth/2, car.Position.Y+carHeight/2))
-			imd.Polygon(0)
+			sprite.Draw(win, pixel.IM.Scaled(pixel.ZV, 0.1).Moved(auto.Posicion))
 		}
 	}
 
