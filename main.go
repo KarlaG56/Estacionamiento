@@ -4,17 +4,15 @@ import (
 	"Simulador/Models"
 	"Simulador/Scenes"
 	"Simulador/Views"
-	_ "Simulador/Views"
 )
 
-const maxCars = 20
-
 func main() {
-	garage := Models.NewGarage(maxCars)
+	// Crear un garaje con capacidad para 20 vehículos
+	garage := Models.NewGarage(20)
 
+	// Iniciar la simulación en segundo plano
 	go Scenes.RunSimulation(garage)
-	Views.ShowGUI()
 
-	// Simulated indefinite loop to keep the program running
-	select {}
+	// Iniciar la interfaz gráfica
+	Views.Show()
 }

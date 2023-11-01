@@ -1,130 +1,175 @@
 package Views
 
 import (
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
+	"github.com/faiface/pixel"
+	"github.com/faiface/pixel/imdraw"
+	"github.com/faiface/pixel/pixelgl"
+	"golang.org/x/image/colornames"
+	"image"
 	"image/color"
 	"math/rand"
-	"sync"
 	"time"
 )
 
 const (
 	maxCars      = 20
+	carWidth     = 40
+	carHeight    = 20
 	garageWidth  = 500
 	garageHeight = 300
 )
 
-var appCtx = app.New()
-var carGraphics []*canvas.Rectangle
-var garageMutex sync.Mutex
-var parkingSpacesSemaphore = make(chan struct{}, maxCars)
-var accessGateSemaphore = make(chan struct{}, 1)
+var cars []*car
 
-func ShowGUI() {
-	window := appCtx.NewWindow("Estacionamiento")
-
-	garage := createParkingGarage()
-
-	containerWithLayout := container.New(layout.NewVBoxLayout(),
-		garage,
-	)
-
-	window.SetContent(containerWithLayout)
-	window.Resize(fyne.NewSize(garageWidth, garageHeight+50))
-
-	window.ShowAndRun()
-
-	go runSimulation()
+type car struct {
+	sprite *pixel.Sprite
+	pos    pixel.Vec
+	speed  float64
 }
 
-func createParkingGarage() fyne.CanvasObject {
-	parkingGarage := container.New(layout.NewHBoxLayout())
+func drawParking(win *pixelgl.Window) {
+	imd := imdraw.New(nil)
+	imd.Color = colornames.Black
 
-	leftSpaces := createParkingSpaces(5)
-	parkingGarage.Add(leftSpaces)
-	entranceImage := createEntranceImage()
-	parkingGarage.Add(entranceImage)
-	rightSpaces := createParkingSpaces(5)
+	// Dibuja los límites del estacionamiento
+	p1 := pixel.V(100, 460)
+	p2 := pixel.V(100, 20)
+	p3 := pixel.V(600, 20)
+	p4 := pixel.V(600, 460)
+	p5 := pixel.V(100, 300)
+	p6 := pixel.V(100, 180)
 
-	parkingGarage.Add(rightSpaces)
+	// Dibuja los límites exteriores del estacionamiento
+	imd.Push(p1)
+	imd.Push(p5)
+	imd.Line(1)
 
-	return parkingGarage
-}
+	imd.Push(p6)
+	imd.Push(p2)
+	imd.Line(1)
 
-func createParkingSpaces(count int) fyne.CanvasObject {
-	parkingSpaces := container.New(layout.NewVBoxLayout())
-	for i := 0; i < count; i++ {
-		parkingSpace := canvas.NewRectangle(color.RGBA{R: 0, G: 255, B: 0, A: 255}) // Color verde para los lugares de estacionamiento
-		parkingSpace.Resize(fyne.NewSize(50, 50))                                   // Tamaño de espacio de estacionamiento
-		parkingSpaces.Add(parkingSpace)
+	imd.Push(p2)
+	imd.Push(p3)
+	imd.Line(1)
+
+	imd.Push(p3)
+	imd.Push(p4)
+	imd.Line(1)
+
+	imd.Push(p4)
+	imd.Push(p1)
+	imd.Line(1)
+
+	// Dibuja las plazas de estacionamiento
+	width := 40.0
+	height := 80.0
+	space := 10.0
+
+	// Dibuja las plazas horizontales
+	for x := 105.0; x <= 595; x += width + space {
+		p1 := pixel.V(x, 455)
+		p2 := pixel.V(x, 455-height)
+		p3 := pixel.V(x+width, 455-height)
+		p4 := pixel.V(x+width, 455)
+
+		imd.Push(p1)
+		imd.Push(p2)
+		imd.Line(1)
+
+		imd.Push(p3)
+		imd.Push(p4)
+		imd.Line(1)
+
+		imd.Push(p4)
+		imd.Push(p1)
+		imd.Line(1)
 	}
-	return parkingSpaces
+
+	// Dibuja las plazas verticales
+	for x := 105.0; x <= 595; x += width + space {
+		p1 := pixel.V(x, 25)
+		p2 := pixel.V(x, 25+height)
+		p3 := pixel.V(x+width, 25+height)
+		p4 := pixel.V(x+width, 25)
+
+		imd.Push(p1)
+		imd.Push(p2)
+		imd.Line(1)
+
+		imd.Push(p3)
+		imd.Push(p4)
+		imd.Line(1)
+
+		imd.Push(p4)
+		imd.Push(p1)
+		imd.Line(1)
+	}
+
+	imd.Draw(win)
 }
 
-func createEntranceImage() fyne.CanvasObject {
-	entranceImageData, _ := theme.FyneLogoResource().Content()
-	entranceResource := fyne.NewStaticResource("entrance.png", entranceImageData)
-	entranceImage := canvas.NewImageFromResource(entranceResource)
-	entranceImage.Resize(fyne.NewSize(50, 50)) // Tamaño de la entrada/salida
-	return entranceImage
+func run() {
+	cfg := pixelgl.WindowConfig{
+		Title:  "Estacionamiento",
+		Bounds: pixel.R(0, 0, 640, 480),
+		VSync:  true,
+	}
+	win, err := pixelgl.NewWindow(cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	lastCarSpawn := time.Now()
+
+	spriteSheet := createCarSprite(carWidth, carHeight)
+
+	for !win.Closed() {
+		if len(cars) < maxCars && time.Since(lastCarSpawn) > 2*time.Second {
+			lastCarSpawn = time.Now()
+			newCar := &car{
+				sprite: spriteSheet,
+				pos:    pixel.V(-40, 300), // Posición inicial desde el lado izquierdo
+				speed:  rand.Float64()*200 + 100,
+			}
+			cars = append(cars, newCar)
+		}
+
+		win.Clear(colornames.White)
+		drawParking(win)
+		for _, car := range cars {
+			if car.pos.X < 570 && car.pos.Y > 30 && car.pos.Y < 455 {
+				car.sprite.Draw(win, pixel.IM.Moved(car.pos))
+				car.pos = car.pos.Add(pixel.V(car.speed*1/60, 0))
+			} else {
+				car.speed = 0
+			}
+		}
+
+		win.Update()
+	}
 }
 
-func runSimulation() {
-	for {
-		select {
-		case <-time.After(time.Second):
-			if len(carGraphics) < maxCars {
-				go AddCarToGarage()
+func createCarSprite(width, height int) *pixel.Sprite {
+	rgba := image.NewRGBA(image.Rect(0, 0, width, height))
+	transparent := color.RGBA{0, 0, 0, 0} // Color transparente
+	red := colornames.Purple
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			// Define el área del carro como roja y el resto como transparente
+			if x > 2 && x < width-3 && y > 2 && y < height-3 {
+				rgba.Set(x, y, red)
+			} else {
+				rgba.Set(x, y, transparent)
 			}
 		}
 	}
+
+	pic := pixel.PictureDataFromImage(rgba)
+	sprite := pixel.NewSprite(pic, pic.Bounds())
+	return sprite
 }
 
-func AddCarToGarage() {
-	car := canvas.NewRectangle(color.RGBA{
-		R: uint8(rand.Intn(255)),
-		G: uint8(rand.Intn(255)),
-		B: uint8(rand.Intn(255)),
-		A: 255,
-	})
-	car.Resize(fyne.NewSize(20, 20))
-	carGraphics = append(carGraphics, car)
-
-	go moveCar(car)
-}
-
-func moveCar(car *canvas.Rectangle) {
-	for {
-		accessGateSemaphore <- struct{}{}
-		<-accessGateSemaphore
-
-		parkingSpacesSemaphore <- struct{}{}
-		garageMutex.Lock()
-
-		car.Move(fyne.NewPos(float32(rand.Intn(garageWidth-20)), float32(garageHeight/2-10)))
-
-		garageMutex.Unlock()
-		<-parkingSpacesSemaphore
-
-		UpdateGarageView()
-
-		time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
-	}
-}
-
-func UpdateGarageView() {
-	contentObjects := []fyne.CanvasObject{canvas.NewRectangle(color.RGBA{R: 192, G: 192, B: 192, A: 255})}
-
-	for _, car := range carGraphics {
-		contentObjects = append(contentObjects, car)
-	}
-
-	window := appCtx.Driver().AllWindows()[0]
-	window.SetContent(container.NewMax(contentObjects...))
-	window.Canvas().Refresh(window.Content())
+func Show() {
+	pixelgl.Run(run)
 }
