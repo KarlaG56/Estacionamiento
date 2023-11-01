@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+func render() {
+	for car := range Models.Canal {
+		Models.MutexCarriles.Lock()
+		for _, occupied := range Models.EstadoCarriles {
+			if !occupied {
+				break
+			}
+		}
+		Models.MutexCarriles.Unlock()
+		go Models.SeleccionarCarril(car.ID)
+	}
+}
+
 func Run() {
 
 	Models.InicializarSistemaDeAutos()
@@ -21,19 +34,7 @@ func Run() {
 		panic(err)
 	}
 
-	go func() {
-		for car := range Models.CanalAutos {
-			Models.MutexCarriles.Lock()
-			for _, occupied := range Models.EstadoCarriles {
-				if !occupied {
-					break
-				}
-			}
-			Models.MutexCarriles.Unlock()
-
-			go Models.SeleccionarCarril(car.ID)
-		}
-	}()
+	go render()
 
 	for !win.Closed() {
 		win.Clear(colornames.White)

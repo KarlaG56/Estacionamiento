@@ -16,17 +16,14 @@ var (
 	ListaDeAutos                 []Auto
 	MutexAutos                   sync.Mutex
 	MutexCarriles                sync.Mutex
+	MutexPuerta                  sync.Mutex
 	AutoEnProcesoDeEntradaSalida bool
 )
 
-func EsperarHastaPosicion(id int, posXObjetivo float64) {
-	for {
-		posAuto := EncontrarPosicionDelAuto(id)
-		if posAuto.X >= posXObjetivo {
-			break
-		}
-		time.Sleep(16 * time.Millisecond)
-	}
+func ActualizarEstadoCarril(lane int, status bool) {
+	MutexCarriles.Lock()
+	defer MutexCarriles.Unlock()
+	EstadoCarriles[lane] = status
 }
 
 func BuscarCarrilDisponible() (int, bool) {
@@ -43,6 +40,16 @@ func BuscarCarrilDisponible() (int, bool) {
 	return -1, false
 }
 
+func EsperarHastaPosicion(id int, posXObjetivo float64) {
+	for {
+		posAuto := EncontrarPosicionDelAuto(id)
+		if posAuto.X >= posXObjetivo {
+			break
+		}
+		time.Sleep(16 * time.Millisecond)
+	}
+}
+
 func SeleccionarCarril(id int) {
 	EsperarHastaPosicion(id, 100)
 	carril, encontrado := BuscarCarrilDisponible()
@@ -51,10 +58,4 @@ func SeleccionarCarril(id int) {
 		return
 	}
 	AsignarCarrilAlAuto(id, carril)
-}
-
-func ActualizarEstadoCarril(lane int, status bool) {
-	MutexCarriles.Lock()
-	defer MutexCarriles.Unlock()
-	EstadoCarriles[lane] = status
 }

@@ -18,11 +18,25 @@ type Auto struct {
 	TiempoInicioTeleportacion time.Time
 }
 
-var CanalAutos chan Auto
+var Canal chan Auto
 
-func InicializarSistemaDeAutos() {
-	CanalAutos = make(chan Auto)
-	go GeneradorDeAutos()
+func AsignarCarrilAlAuto(id int, carril int) {
+	MutexAutos.Lock()
+	MutexPuerta.Lock()
+	defer MutexAutos.Unlock()
+	defer MutexPuerta.Unlock()
+	for i := range ListaDeAutos {
+		if ListaDeAutos[i].ID == id {
+			ListaDeAutos[i].Carril = carril
+			break
+		}
+	}
+}
+
+func AsignarTiempoDeSalida(auto *Auto) {
+	rand.Seed(time.Now().UnixNano())
+	tiempoDeSalida := time.Duration(rand.Intn(10)+10) * time.Second
+	auto.TiempoParaSalir = time.Now().Add(tiempoDeSalida)
 }
 
 func CrearNuevoAuto(id int) Auto {
@@ -38,50 +52,15 @@ func CrearNuevoAuto(id int) Auto {
 	return nuevoAuto
 }
 
-func AsignarTiempoDeSalida(auto *Auto) {
-	rand.Seed(time.Now().UnixNano())
-	tiempoDeSalida := time.Duration(rand.Intn(5)+1) * time.Second
-	auto.TiempoParaSalir = time.Now().Add(tiempoDeSalida)
+func EliminarAuto(indice int) {
+	ListaDeAutos = append(ListaDeAutos[:indice], ListaDeAutos[indice+1:]...)
 }
 
-func ObtenerListaDeAutos() []Auto {
-	MutexAutos.Lock()
-	defer MutexAutos.Unlock()
-	listaActualizadaDeAutos := make([]Auto, len(ListaDeAutos))
-	copy(listaActualizadaDeAutos, ListaDeAutos)
-	return listaActualizadaDeAutos
-}
-
-func GeneradorDeAutos() {
-	id := 0
-	for {
-		id++
-		nuevoAuto := CrearNuevoAuto(id)
-		CanalAutos <- nuevoAuto
-		time.Sleep(time.Millisecond * 500)
-	}
-}
-
-func AsignarCarrilAlAuto(id int, carril int) {
-	MutexAutos.Lock()
-	defer MutexAutos.Unlock()
-	for i := range ListaDeAutos {
-		if ListaDeAutos[i].ID == id {
-			ListaDeAutos[i].Carril = carril
-			break
-		}
-	}
-}
-
-func ReiniciarPosicionDelAuto(id int) {
-	MutexAutos.Lock()
-	defer MutexAutos.Unlock()
-	for i := range ListaDeAutos {
-		if ListaDeAutos[i].ID == id {
-			ListaDeAutos[i].Posicion = pixel.V(0, 300)
-			break
-		}
-	}
+func EstacionarAuto(auto *Auto, posX, posY float64) {
+	auto.Posicion.X = posX
+	auto.Posicion.Y = posY
+	auto.Estacionado = true
+	AsignarTiempoDeSalida(auto)
 }
 
 func EncontrarPosicionDelAuto(id int) pixel.Vec {
@@ -95,15 +74,19 @@ func EncontrarPosicionDelAuto(id int) pixel.Vec {
 	return pixel.Vec{}
 }
 
-func EstacionarAuto(auto *Auto, posX, posY float64) {
-	auto.Posicion.X = posX
-	auto.Posicion.Y = posY
-	auto.Estacionado = true
-	AsignarTiempoDeSalida(auto)
+func GeneradorDeAutos() {
+	id := 0
+	for {
+		id++
+		nuevoAuto := CrearNuevoAuto(id)
+		Canal <- nuevoAuto
+		time.Sleep(time.Millisecond * 500)
+	}
 }
 
-func EliminarAuto(indice int) {
-	ListaDeAutos = append(ListaDeAutos[:indice], ListaDeAutos[indice+1:]...)
+func InicializarSistemaDeAutos() {
+	Canal = make(chan Auto)
+	go GeneradorDeAutos()
 }
 
 func LogicaDeMovimientoDeAutos() {
@@ -130,6 +113,8 @@ func LogicaDeMovimientoDeAutos() {
 }
 
 func LogicaDeSalidaDelAuto() {
+	MutexPuerta.Lock()
+	defer MutexPuerta.Unlock()
 	for i := len(ListaDeAutos) - 1; i >= 0; i-- {
 		if ListaDeAutos[i].Estacionado && time.Now().After(ListaDeAutos[i].TiempoParaSalir) && !ListaDeAutos[i].EnProcesoDeEntrada {
 			if !ListaDeAutos[i].EnProcesoDeTeleportacion {
@@ -140,6 +125,25 @@ func LogicaDeSalidaDelAuto() {
 				ActualizarEstadoCarril(ListaDeAutos[i].Carril, false)
 				EliminarAuto(i)
 			}
+		}
+	}
+}
+
+func ObtenerListaDeAutos() []Auto {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	listaActualizadaDeAutos := make([]Auto, len(ListaDeAutos))
+	copy(listaActualizadaDeAutos, ListaDeAutos)
+	return listaActualizadaDeAutos
+}
+
+func ReiniciarPosicionDelAuto(id int) {
+	MutexAutos.Lock()
+	defer MutexAutos.Unlock()
+	for i := range ListaDeAutos {
+		if ListaDeAutos[i].ID == id {
+			ListaDeAutos[i].Posicion = pixel.V(0, 300)
+			break
 		}
 	}
 }
